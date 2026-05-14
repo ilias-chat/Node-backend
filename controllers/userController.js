@@ -32,10 +32,22 @@ async function sync(req, res, next) {
       email: email.trim().toLowerCase(),
     };
     if (name !== undefined) {
-      set.name = typeof name === 'string' ? name.trim() : name;
+      if (name === null) {
+        // omit — do not assign null (Mongoose String cast error)
+      } else if (typeof name === 'string') {
+        set.name = name.trim();
+      } else {
+        return res.status(400).json({ error: 'name must be a string when provided' });
+      }
     }
     if (avatar !== undefined) {
-      set.avatar = typeof avatar === 'string' ? avatar.trim() : avatar;
+      if (avatar === null || avatar === '') {
+        set.avatar = '';
+      } else if (typeof avatar === 'string') {
+        set.avatar = avatar.trim();
+      } else {
+        return res.status(400).json({ error: 'avatar must be a string, null, or empty string' });
+      }
     }
 
     const user = await User.findOneAndUpdate(
@@ -71,10 +83,22 @@ async function updateProfile(req, res, next) {
     const { name, avatar } = req.body || {};
     const set = {};
     if (name !== undefined) {
-      set.name = typeof name === 'string' ? name.trim() : name;
+      if (name === null) {
+        // omit
+      } else if (typeof name === 'string') {
+        set.name = name.trim();
+      } else {
+        return res.status(400).json({ error: 'name must be a string when provided' });
+      }
     }
     if (avatar !== undefined) {
-      set.avatar = typeof avatar === 'string' ? avatar.trim() : avatar;
+      if (avatar === null || avatar === '') {
+        set.avatar = '';
+      } else if (typeof avatar === 'string') {
+        set.avatar = avatar.trim();
+      } else {
+        return res.status(400).json({ error: 'avatar must be a string, null, or empty string' });
+      }
     }
     if (Object.keys(set).length === 0) {
       return res.status(400).json({ error: 'No updatable fields provided' });

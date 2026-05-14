@@ -45,7 +45,7 @@ function createApp(options = {}) {
   app.use((err, _req, res, _next) => {
     console.error(err);
     if (res.headersSent) return;
-    res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).type('application/json').json({ error: 'Internal Server Error' });
   });
 
   return app;
