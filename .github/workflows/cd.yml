@@ -2,9 +2,8 @@
 #
 # Secrets (GitHub → Settings → Secrets and variables → Actions → Secrets):
 #   DOCKERHUB_USERNAME   Docker Hub namespace (username or org)
-#   DOCKERHUB_TOKEN      Docker Hub Access Token (Read & Write)
+#   DOCKERHUB_TOKEN      Docker Hub Access Token (Read & Write) — paste as ONE line, no quotes, no trailing newline
 #   GCP_SA_KEY           Service account JSON key for deploying to Cloud Run
-#
 # You can store GCP + repo name as either Secrets or Variables. This workflow reads
 # Secrets first (matches common setups), then falls back to Variables.
 #
@@ -44,10 +43,19 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          user=$(printf '%s' "$DOCKERHUB_USERNAME" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          token=$(printf '%s' "$DOCKERHUB_TOKEN" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          if [ -z "$user" ] || [ -z "$token" ]; then
+            echo "::error::DOCKERHUB_USERNAME or DOCKERHUB_TOKEN is empty. Add both under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          echo "DOCKERHUB_USER=$user" >> "$GITHUB_ENV"
+          printf '%s' "$token" | docker login -u "$user" --password-stdin docker.io
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
@@ -55,8 +63,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPO_NAME }}:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPO_NAME }}:${{ github.sha }}
+            ${{ env.DOCKERHUB_USER }}/${{ env.DOCKERHUB_REPO_NAME }}:latest
+            ${{ env.DOCKERHUB_USER }}/${{ env.DOCKERHUB_REPO_NAME }}:${{ github.sha }}
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -69,6 +77,6 @@ jobs:
           service: ${{ env.CLOUD_RUN_NAME }}
           region: ${{ env.GCP_REGION_NAME }}
           project_id: ${{ env.GCP_PROJECT }}
-          image: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKERHUB_REPO_NAME }}:${{ github.sha }}
+          image: ${{ env.DOCKERHUB_USER }}/${{ env.DOCKERHUB_REPO_NAME }}:${{ github.sha }}
           # Public HTTPS URL (restrict later with IAM / Cloud Armor). Cloud Run sets PORT for the container.
           flags: --allow-unauthenticated --port=3000
