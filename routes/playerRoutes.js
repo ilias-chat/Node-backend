@@ -49,9 +49,7 @@ function createPlayerRoutes(options = {}) {
    * /api/players/nearby:
    *   get:
    *     tags: [Players]
-   *     summary: Players and stadiums within radius (requires Firebase token)
-   *     security:
-   *       - bearerAuth: []
+   *     summary: Players and stadiums within radius (public)
    *     parameters:
    *       - in: query
    *         name: lat
@@ -76,13 +74,8 @@ function createPlayerRoutes(options = {}) {
    *           application/json:
    *             schema:
    *               $ref: '#/components/schemas/Error'
-   *       '401':
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/Error'
    */
-  router.get('/nearby', verifyFirebaseToken, playerController.nearbyPlayers);
+  router.get('/nearby', playerController.nearbyPlayers);
 
   /**
    * @openapi

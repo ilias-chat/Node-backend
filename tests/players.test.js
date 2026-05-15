@@ -54,13 +54,10 @@ function mockApiFootballService() {
   };
 }
 
-describe('Players API — nearby auth (no database)', () => {
-  test('GET /api/players/nearby without Authorization returns 401', async () => {
+describe('Players API — nearby validation (no database)', () => {
+  test('GET /api/players/nearby without lat/lng returns 400', async () => {
     const app = createApp({ verifyIdToken: mockVerify() });
-    await request(app)
-      .get('/api/players/nearby')
-      .query({ lat: 51.5, lng: -0.12, radiusKm: 50 })
-      .expect(401);
+    await request(app).get('/api/players/nearby').query({ radiusKm: 50 }).expect(400);
   });
 });
 
@@ -143,6 +140,18 @@ mongoDescribe('Players API — integration (requires MONGO_URI)', { concurrency:
     assert.strictEqual(res.body.name, 'Import Alpha');
     assert.ok(res.body.stats);
     assert.ok(res.body.location);
+  });
+
+  test('GET nearby without Authorization is public and returns stadiums deduped', async () => {
+    const app = createApp({ verifyIdToken: mockVerify({ uid, email: 'playeruser@test.com' }) });
+    const res = await request(app)
+      .get('/api/players/nearby')
+      .query({ lat: 51.5074, lng: -0.1278, radiusKm: 500 })
+      .expect(200);
+    assert.ok(Array.isArray(res.body.players));
+    assert.ok(Array.isArray(res.body.stadiums));
+    assert.ok(res.body.players.length >= 1);
+    assert.ok(res.body.stadiums.length >= 1);
   });
 
   test('GET nearby with token returns stadiums deduped', async () => {
