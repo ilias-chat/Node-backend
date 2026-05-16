@@ -75,6 +75,26 @@ describe('Players API — nearby validation (no database)', () => {
     const app = createApp({ verifyIdToken: mockVerify() });
     await request(app).get('/api/players/nearby').query({ radiusKm: 50 }).expect(400);
   });
+
+  test('GET /api/players/nearby accepts distance in meters as radius alias', async () => {
+    const app = createApp({ verifyIdToken: mockVerify() });
+    const Player = require('../models/Player');
+    const originalFind = Player.find;
+    Player.find = () => ({
+      sort: () => ({
+        lean: async () => [],
+      }),
+    });
+    try {
+      const res = await request(app)
+        .get('/api/players/nearby')
+        .query({ lat: 51.5, lng: -0.12, distance: 50_000 })
+        .expect(200);
+      assert.deepEqual(res.body, { players: [], stadiums: [] });
+    } finally {
+      Player.find = originalFind;
+    }
+  });
 });
 
 const mongoDescribe = process.env.MONGO_URI ? describe : describe.skip;

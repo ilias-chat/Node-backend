@@ -123,9 +123,17 @@ async function nearbyPlayers(req, res, next) {
   try {
     const lat = Number(req.query.lat);
     const lng = Number(req.query.lng);
-    const radiusKm = Number(req.query.radiusKm);
+    let radiusKm = Number(req.query.radiusKm);
+    if (!Number.isFinite(radiusKm)) {
+      const distanceMeters = Number(req.query.distance);
+      if (Number.isFinite(distanceMeters) && distanceMeters > 0) {
+        radiusKm = distanceMeters / 1000;
+      }
+    }
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(radiusKm)) {
-      return res.status(400).json({ error: 'lat, lng, and radiusKm must be finite numbers' });
+      return res.status(400).json({
+        error: 'lat, lng, and radiusKm (or distance in meters) must be finite numbers',
+      });
     }
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
       return res.status(400).json({ error: 'lat or lng out of range' });
