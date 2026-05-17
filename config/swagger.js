@@ -86,6 +86,11 @@ const options = {
             leagueId: { type: 'integer', description: 'API-Football league id' },
             teamId: { type: 'integer', description: 'API-Football team id' },
             season: { type: 'integer', description: 'Season year (e.g. 2023)' },
+            externalIds: {
+              type: 'array',
+              items: { type: 'integer' },
+              description: 'Optional API-Football player ids to import; when omitted, imports the full squad',
+            },
           },
         },
         AddCommentBody: {

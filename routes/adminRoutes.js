@@ -10,7 +10,8 @@ function createAdminRoutes(options = {}) {
   const { verifyFirebaseToken, loadMongoUser, requireAdmin } = createAuthMiddleware(options);
 
   const router = express.Router();
-  const adminChain = [verifyFirebaseToken, loadMongoUser, requireAdmin];
+  const authChain = [verifyFirebaseToken, loadMongoUser];
+  const adminChain = [...authChain, requireAdmin];
 
   function resolveApiFootballService() {
     if (options.apiFootballService) return options.apiFootballService;
@@ -72,7 +73,7 @@ function createAdminRoutes(options = {}) {
    *       '200':
    *         description: League options with id, name, logo
    */
-  router.get('/leagues', ...adminChain, (req, res, next) => {
+  router.get('/leagues', ...authChain, (req, res, next) => {
     let apiFootballService;
     try {
       apiFootballService = resolveApiFootballService();
@@ -105,7 +106,7 @@ function createAdminRoutes(options = {}) {
    *       '200':
    *         description: Team options with id, name, logo
    */
-  router.get('/teams', ...adminChain, (req, res, next) => {
+  router.get('/teams', ...authChain, (req, res, next) => {
     let apiFootballService;
     try {
       apiFootballService = resolveApiFootballService();
@@ -115,7 +116,17 @@ function createAdminRoutes(options = {}) {
     return playerAdminController.listTeams(req, res, next, apiFootballService);
   });
 
-  router.post('/import-players', ...adminChain, (req, res, next) => {
+  router.get('/squad-players', ...authChain, (req, res, next) => {
+    let apiFootballService;
+    try {
+      apiFootballService = resolveApiFootballService();
+    } catch (err) {
+      return res.status(503).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+    return playerAdminController.listSquadPlayers(req, res, next, apiFootballService);
+  });
+
+  router.post('/import-players', ...authChain, (req, res, next) => {
     let apiFootballService;
     try {
       apiFootballService = resolveApiFootballService();

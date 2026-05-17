@@ -28,16 +28,28 @@ function buildPlayerImportSet(doc) {
  */
 async function importPlayers(req, res, next, apiFootballService) {
   try {
-    const { leagueId, teamId, season } = req.body || {};
+    const { leagueId, teamId, season, externalIds } = req.body || {};
     if (leagueId == null || teamId == null || season == null) {
       return res.status(400).json({ error: 'leagueId, teamId, and season are required' });
     }
 
-    const { players, teamName, leagueName, venueName } = await apiFootballService.buildImportPayloads({
+    const { players: allPlayers, teamName, leagueName, venueName } = await apiFootballService.buildImportPayloads({
       leagueId: Number(leagueId),
       teamId: Number(teamId),
       season: Number(season),
     });
+
+    let players = allPlayers;
+    if (externalIds != null) {
+      if (!Array.isArray(externalIds) || externalIds.length === 0) {
+        return res.status(400).json({ error: 'externalIds must be a non-empty array of player ids' });
+      }
+      const idSet = new Set(externalIds.map((id) => Number(id)).filter((id) => Number.isFinite(id)));
+      players = allPlayers.filter((doc) => idSet.has(doc.externalId));
+      if (players.length === 0) {
+        return res.status(400).json({ error: 'No matching players for the given externalIds' });
+      }
+    }
 
     if (players.length === 0) {
       return res.status(200).json({
@@ -133,6 +145,46 @@ async function listLeagues(req, res, next, apiFootballService) {
  * @param {import('express').NextFunction} next
  * @param {{ fetchTeamsForLeague: (leagueId: number, season: number) => Promise<object[]> }} apiFootballService
  */
+/**
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {import('express').NextFunction} next
+ * @param {{ buildImportPayloads: (p: { leagueId: number, teamId: number, season: number }) => Promise<{ players: object[], teamName: string, leagueName: string }> }} apiFootballService
+ */
+async function listSquadPlayers(req, res, next, apiFootballService) {
+  try {
+    const leagueId = Number(req.query.leagueId);
+    const teamId = Number(req.query.teamId);
+    const season = Number(req.query.season);
+    if (!Number.isFinite(leagueId) || !Number.isFinite(teamId) || !Number.isFinite(season)) {
+      return res.status(400).json({ error: 'leagueId, teamId, and season query parameters must be numbers' });
+    }
+    const { players, teamName, leagueName } = await apiFootballService.buildImportPayloads({
+      leagueId,
+      teamId,
+      season,
+    });
+    const data = players.map((p) => ({
+      externalId: p.externalId,
+      name: p.name,
+      position: p.position,
+      image: p.image,
+    }));
+    return res.json({ data, teamName, leagueName });
+  } catch (err) {
+    if (err instanceof ApiFootballError) {
+      return res.status(err.statusCode).json({ error: err.message });
+    }
+    return next(err);
+  }
+}
+
+/**
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {import('express').NextFunction} next
+ * @param {{ fetchTeamsForLeague: (leagueId: number, season: number) => Promise<object[]> }} apiFootballService
+ */
 async function listTeams(req, res, next, apiFootballService) {
   try {
     const leagueId = Number(req.query.leagueId);
@@ -150,4 +202,4 @@ async function listTeams(req, res, next, apiFootballService) {
   }
 }
 
-module.exports = { importPlayers, deletePlayer, listLeagues, listTeams };
+module.exports = { importPlayers, deletePlayer, listLeagues, listTeams, listSquadPlayers };

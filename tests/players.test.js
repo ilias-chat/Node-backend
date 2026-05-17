@@ -148,15 +148,30 @@ mongoDescribe('Players API — integration (requires MONGO_URI)', { concurrency:
     assert.strictEqual(res.body.data[0].id, 33);
   });
 
-  test('admin import-players upserts squad', async () => {
+  test('GET /api/admin/squad-players returns squad preview', async () => {
     const app = createApp({
-      verifyIdToken: mockVerify({ uid: adminUid, email: 'playeradmin@test.com' }),
+      verifyIdToken: mockVerify({ uid, email: 'playeruser@test.com' }),
+      apiFootballService: mockApiFootballService(),
+    });
+    const res = await request(app)
+      .get('/api/admin/squad-players')
+      .query({ leagueId: 39, teamId: 33, season: 2023 })
+      .set('Authorization', 'Bearer ok')
+      .expect(200);
+    assert.strictEqual(res.body.data.length, 2);
+    assert.strictEqual(res.body.data[0].externalId, 910001);
+    assert.strictEqual(res.body.data[0].name, 'Import Alpha');
+  });
+
+  test('registered user import-players upserts selected squad members', async () => {
+    const app = createApp({
+      verifyIdToken: mockVerify({ uid, email: 'playeruser@test.com' }),
       apiFootballService: mockApiFootballService(),
     });
     const res = await request(app)
       .post('/api/admin/import-players')
       .set('Authorization', 'Bearer ok')
-      .send({ leagueId: 39, teamId: 33, season: 2023 })
+      .send({ leagueId: 39, teamId: 33, season: 2023, externalIds: [910001, 910002] })
       .expect(200);
     assert.ok(typeof res.body.inserted === 'number');
     assert.ok(typeof res.body.updated === 'number');
@@ -169,7 +184,7 @@ mongoDescribe('Players API — integration (requires MONGO_URI)', { concurrency:
     assert.ok(!withoutPhoto?.image);
   });
 
-  test('non-admin cannot import', async () => {
+  test('import-players requires externalIds', async () => {
     const app = createApp({
       verifyIdToken: mockVerify({ uid, email: 'playeruser@test.com' }),
       apiFootballService: mockApiFootballService(),
@@ -177,8 +192,8 @@ mongoDescribe('Players API — integration (requires MONGO_URI)', { concurrency:
     await request(app)
       .post('/api/admin/import-players')
       .set('Authorization', 'Bearer ok')
-      .send({ leagueId: 39, teamId: 33, season: 2023 })
-      .expect(403);
+      .send({ leagueId: 39, teamId: 33, season: 2023, externalIds: [] })
+      .expect(400);
   });
 
   test('GET list supports team partial filter and pagination', async () => {
