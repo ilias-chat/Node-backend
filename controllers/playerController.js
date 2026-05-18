@@ -232,11 +232,33 @@ async function createPlayer(req, res, next, apiFootballService) {
       return res.status(400).json({ error: 'image must be a valid base64 photo under 2MB' });
     }
 
-    const { teamName, leagueName, venueName, location } = await apiFootballService.resolveTeamStadiumContext({
+    const ctx = await apiFootballService.resolveTeamStadiumContext({
       leagueId: lid,
       teamId: tid,
       season: seasonNum,
     });
+
+    let location = ctx.location;
+    const lat = Number(req.body.lat);
+    const lng = Number(req.body.lng);
+    const hasDeviceCoords =
+      Number.isFinite(lat) &&
+      Number.isFinite(lng) &&
+      lat >= -90 &&
+      lat <= 90 &&
+      lng >= -180 &&
+      lng <= 180;
+    if (!location && hasDeviceCoords) {
+      location = { type: 'Point', coordinates: [lng, lat] };
+    }
+    if (!location) {
+      return res.status(422).json({
+        error:
+          'Could not resolve stadium coordinates for this team. Enable location on your device and try again.',
+      });
+    }
+
+    const { teamName, leagueName, venueName } = ctx;
 
     const duplicate = await Player.findOne({
       name: new RegExp(`^${escapeRegex(trimmedName)}$`, 'i'),

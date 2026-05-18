@@ -401,14 +401,9 @@ function createApiFootballService(cfg = {}) {
       }
     }
 
-    if (!coords) {
-      throw new ApiFootballError(
-        'Could not resolve stadium coordinates (no coords on team venue, and no venue id for /venues or geocode)',
-        422
-      );
-    }
-
-    const location = { type: 'Point', coordinates: [coords.lng, coords.lat] };
+    const location = coords
+      ? { type: 'Point', coordinates: [coords.lng, coords.lat] }
+      : null;
     return {
       teamName: teamRow.teamName,
       leagueName,
@@ -430,7 +425,14 @@ function createApiFootballService(cfg = {}) {
       return cached.data;
     }
 
-    const { teamName, leagueName, venueName, location } = await resolveTeamStadiumContext(params);
+    const ctx = await resolveTeamStadiumContext(params);
+    if (!ctx.location) {
+      throw new ApiFootballError(
+        'Could not resolve stadium coordinates (no coords on team venue, and no venue id for /venues or geocode)',
+        422
+      );
+    }
+    const { teamName, leagueName, venueName, location } = ctx;
 
     const rawPlayers = await fetchAllPlayersPages(teamId, season);
     const players = [];

@@ -174,6 +174,16 @@ function createAdminRoutes(options = {}) {
    *             schema:
    *               $ref: '#/components/schemas/Error'
    */
+  router.patch('/players/:id', ...adminChain, (req, res, next) => {
+    let apiFootballService;
+    try {
+      apiFootballService = resolveApiFootballService();
+    } catch (err) {
+      return res.status(503).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+    return playerAdminController.updatePlayer(req, res, next, apiFootballService);
+  });
+
   router.delete('/players/:id', ...adminChain, playerAdminController.deletePlayer);
 
   return router;

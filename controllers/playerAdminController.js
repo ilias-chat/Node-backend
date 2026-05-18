@@ -1,6 +1,28 @@
 const mongoose = require('mongoose');
 const Player = require('../models/Player');
+const { escapeRegex } = require('../utils/escapeRegex');
 const { ApiFootballError } = require('../services/apiFootballService');
+
+const VALID_POSITIONS = new Set(['Attacker', 'Midfielder', 'Defender', 'Goalkeeper']);
+const MAX_IMAGE_CHARS = 2_800_000;
+
+/**
+ * @param {unknown} image
+ * @returns {string|undefined|null}
+ */
+function normalizeBase64Image(image) {
+  if (image == null || image === '') return undefined;
+  const s = String(image).trim();
+  if (!s) return undefined;
+  if (s.length > MAX_IMAGE_CHARS) {
+    return null;
+  }
+  if (s.startsWith('data:image/')) return s;
+  if (/^[A-Za-z0-9+/=]+$/.test(s)) {
+    return `data:image/jpeg;base64,${s}`;
+  }
+  return undefined;
+}
 
 /** Fields written on import upsert (`image` only when API-Football provides a photo URL). */
 function buildPlayerImportSet(doc) {
@@ -101,6 +123,103 @@ async function importPlayers(req, res, next, apiFootballService) {
  * @param {import('express').Response} res
  * @param {import('express').NextFunction} next
  */
+/**
+ * @param {import('express').Request} req
+ * @param {import('express').Response} res
+ * @param {import('express').NextFunction} next
+ * @param {{ resolveTeamStadiumContext: (p: { leagueId: number, teamId: number, season: number }) => Promise<{ teamName: string, leagueName: string, venueName: string, location: object }> }} apiFootballService
+ */
+async function updatePlayer(req, res, next, apiFootballService) {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid player id' });
+    }
+
+    const existing = await Player.findById(id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+
+    const { name, position, leagueId, teamId, season, image } = req.body || {};
+    const trimmedName = name != null ? String(name).trim() : '';
+    if (!trimmedName) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+    if (!VALID_POSITIONS.has(position)) {
+      return res.status(400).json({
+        error: 'position must be one of: Attacker, Midfielder, Defender, Goalkeeper',
+      });
+    }
+    const lid = Number(leagueId);
+    const tid = Number(teamId);
+    const seasonNum = Number(season);
+    if (!Number.isFinite(lid) || !Number.isFinite(tid) || !Number.isFinite(seasonNum)) {
+      return res.status(400).json({ error: 'leagueId, teamId, and season must be numbers' });
+    }
+
+    const lat = Number(req.body.lat);
+    const lng = Number(req.body.lng);
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng) ||
+      lat < -90 ||
+      lat > 90 ||
+      lng < -180 ||
+      lng > 180
+    ) {
+      return res.status(400).json({ error: 'lat and lng must be valid coordinates' });
+    }
+
+    const normalizedImage = normalizeBase64Image(image);
+    if (image != null && image !== '' && normalizedImage == null) {
+      return res.status(400).json({ error: 'image must be a valid base64 photo under 2MB' });
+    }
+
+    const ctx = await apiFootballService.resolveTeamStadiumContext({
+      leagueId: lid,
+      teamId: tid,
+      season: seasonNum,
+    });
+
+    const { teamName, leagueName, venueName } = ctx;
+    const location = { type: 'Point', coordinates: [lng, lat] };
+
+    const duplicate = await Player.findOne({
+      _id: { $ne: id },
+      name: new RegExp(`^${escapeRegex(trimmedName)}$`, 'i'),
+      team: new RegExp(`^${escapeRegex(teamName)}$`, 'i'),
+    }).lean();
+    if (duplicate) {
+      return res.status(409).json({ error: 'A player with this name already exists on this team' });
+    }
+
+    /** @type {Record<string, unknown>} */
+    const update = {
+      name: trimmedName,
+      position,
+      team: teamName,
+      league: leagueName,
+      venueName,
+      location,
+    };
+    if (normalizedImage) {
+      update.image = normalizedImage;
+    }
+
+    const updated = await Player.findByIdAndUpdate(id, { $set: update }, { new: true }).lean();
+    return res.json(updated);
+  } catch (err) {
+    if (err instanceof ApiFootballError) {
+      return res.status(err.statusCode).json({ error: err.message });
+    }
+    if (err?.code === 11000) {
+      return res.status(409).json({ error: 'A player with this name already exists on this team' });
+    }
+    return next(err);
+  }
+}
+
 async function deletePlayer(req, res, next) {
   try {
     const { id } = req.params;
@@ -202,4 +321,11 @@ async function listTeams(req, res, next, apiFootballService) {
   }
 }
 
-module.exports = { importPlayers, deletePlayer, listLeagues, listTeams, listSquadPlayers };
+module.exports = {
+  importPlayers,
+  updatePlayer,
+  deletePlayer,
+  listLeagues,
+  listTeams,
+  listSquadPlayers,
+};

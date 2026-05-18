@@ -358,6 +358,70 @@ mongoDescribe('Players API — integration (requires MONGO_URI)', { concurrency:
     assert.ok(myComments.body.data[0].player?.name);
   });
 
+  test('admin updates player by id', async () => {
+    const doc = await Player.findOne({ externalId: 910001 });
+    assert.ok(doc);
+    const app = createApp({
+      verifyIdToken: mockVerify({ uid: adminUid, email: 'playeradmin@test.com' }),
+      apiFootballService: mockApiFootballService(),
+    });
+    const res = await request(app)
+      .patch(`/api/admin/players/${doc._id}`)
+      .set('Authorization', 'Bearer ok')
+      .send({
+        name: 'Import Alpha Updated',
+        position: 'Midfielder',
+        leagueId: 39,
+        teamId: 33,
+        season: 2024,
+        lat: 51.51,
+        lng: -0.13,
+      })
+      .expect(200);
+    assert.strictEqual(res.body.name, 'Import Alpha Updated');
+    assert.strictEqual(res.body.position, 'Midfielder');
+    assert.strictEqual(res.body.team, 'Test FC');
+    assert.deepEqual(res.body.location.coordinates, [-0.13, 51.51]);
+    assert.strictEqual(res.body.externalId, 910001);
+
+    const dup = await request(app)
+      .patch(`/api/admin/players/${doc._id}`)
+      .set('Authorization', 'Bearer ok')
+      .send({
+        name: 'Import Beta',
+        position: 'Attacker',
+        leagueId: 39,
+        teamId: 33,
+        season: 2024,
+        lat: 51.5,
+        lng: -0.12,
+      })
+      .expect(409);
+    assert.ok(dup.body.error);
+  });
+
+  test('non-admin cannot update player', async () => {
+    const doc = await Player.findOne({ externalId: 910002 });
+    assert.ok(doc);
+    const app = createApp({
+      verifyIdToken: mockVerify({ uid, email: 'playeruser@test.com' }),
+      apiFootballService: mockApiFootballService(),
+    });
+    await request(app)
+      .patch(`/api/admin/players/${doc._id}`)
+      .set('Authorization', 'Bearer ok')
+      .send({
+        name: 'Hacked',
+        position: 'Attacker',
+        leagueId: 39,
+        teamId: 33,
+        season: 2024,
+        lat: 51.5,
+        lng: -0.12,
+      })
+      .expect(403);
+  });
+
   test('admin deletes player by id', async () => {
     const doc = await Player.findOne({ externalId: 910001 });
     assert.ok(doc);
