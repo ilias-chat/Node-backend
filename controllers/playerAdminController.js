@@ -151,13 +151,6 @@ async function updatePlayer(req, res, next, apiFootballService) {
         error: 'position must be one of: Attacker, Midfielder, Defender, Goalkeeper',
       });
     }
-    const lid = Number(leagueId);
-    const tid = Number(teamId);
-    const seasonNum = Number(season);
-    if (!Number.isFinite(lid) || !Number.isFinite(tid) || !Number.isFinite(seasonNum)) {
-      return res.status(400).json({ error: 'leagueId, teamId, and season must be numbers' });
-    }
-
     const lat = Number(req.body.lat);
     const lng = Number(req.body.lng);
     if (
@@ -176,13 +169,30 @@ async function updatePlayer(req, res, next, apiFootballService) {
       return res.status(400).json({ error: 'image must be a valid base64 photo under 2MB' });
     }
 
-    const ctx = await apiFootballService.resolveTeamStadiumContext({
-      leagueId: lid,
-      teamId: tid,
-      season: seasonNum,
-    });
+    const hasTeamSelection =
+      leagueId != null && teamId != null && season != null && season !== '';
+    let teamName = existing.team;
+    let leagueName = existing.league;
+    let venueName = existing.venueName;
 
-    const { teamName, leagueName, venueName } = ctx;
+    if (hasTeamSelection) {
+      const lid = Number(leagueId);
+      const tid = Number(teamId);
+      const seasonNum = Number(season);
+      if (!Number.isFinite(lid) || !Number.isFinite(tid) || !Number.isFinite(seasonNum)) {
+        return res.status(400).json({ error: 'leagueId, teamId, and season must be numbers' });
+      }
+
+      const ctx = await apiFootballService.resolveTeamStadiumContext({
+        leagueId: lid,
+        teamId: tid,
+        season: seasonNum,
+      });
+      teamName = ctx.teamName;
+      leagueName = ctx.leagueName;
+      venueName = ctx.venueName;
+    }
+
     const location = { type: 'Point', coordinates: [lng, lat] };
 
     const duplicate = await Player.findOne({
